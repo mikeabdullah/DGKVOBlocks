@@ -32,12 +32,6 @@
 
 NSString *DGKVOBlocksObservationContext = @"DGKVOBlocksObservationContext";
 
-NSString *const DGKVOBlocksObserversAssociatedObjectsKey = @"DGKVOBlocksObserversAssociatedObjectsKey";
-
-#if __has_feature(objc_arc)
-#define DGKVOBlocksObserversAssociatedObjectsKey (__bridge const void *)DGKVOBlocksObserversAssociatedObjectsKey
-#endif
-
 //***************************************************************************
 
 @interface DGKVOBlocksObserver : NSObject 
@@ -75,36 +69,6 @@ NSString *const DGKVOBlocksObserversAssociatedObjectsKey = @"DGKVOBlocksObserver
 
 //***************************************************************************
 
-@interface NSObject (DGKVOBlocksProperties) 
-
-@property (readonly) NSMutableArray *dgkvo_blockObservers;
-
-@end
-
-@implementation NSObject (DGKVOBlocksProperties) 
-
-- (NSMutableArray *)dgkvo_blockObservers
-{
-    @synchronized (self) {
-        
-       NSMutableArray *setDict = objc_getAssociatedObject(self, DGKVOBlocksObserversAssociatedObjectsKey);
-
-        if (setDict == nil) {
-            NSMutableArray *newSetDict = [NSMutableArray array];
-            
-            objc_setAssociatedObject(self, DGKVOBlocksObserversAssociatedObjectsKey, newSetDict, OBJC_ASSOCIATION_RETAIN);
-            
-            return newSetDict;
-        }
-        
-        return setDict; 
-    }
-}
-
-@end
-
-//***************************************************************************
-
 @implementation NSObject (DGKVOBlocks)
 
 - (id)dgkvo_addObserverForKeyPath:(NSString *)keyPath options:(NSKeyValueObservingOptions)options queue:(NSOperationQueue *)queue usingBlock:(DGKVOObserverBlock)block
@@ -119,25 +83,18 @@ NSString *const DGKVOBlocksObserversAssociatedObjectsKey = @"DGKVOBlocksObserver
     
     [self addObserver:newBlocksObserver forKeyPath:keyPath options:options context:&DGKVOBlocksObservationContext];
     
-    @synchronized (self.dgkvo_blockObservers) {
-        [self.dgkvo_blockObservers addObject:newBlocksObserver];
-    }
-    
-#if !__has_feature(objc_arc)
-    [newBlocksObserver release];
-#endif
-    
+    // Reference counting:  we retain the observer until client removes it
+    // GC:                  the caller is responsible for keeping strong ref to the observer
     return newBlocksObserver;
 }
 
-- (void)dgkvo_removeObserver:(id)identifier
+- (void)dgkvo_removeObserver:(id)observer
 {
-    //Now in ARC and GC just removing this reference should be enough to kill the observation
-    [self removeObserver:identifier forKeyPath:[identifier keyPath]];
+    [self removeObserver:observer forKeyPath:[observer keyPath]];
     
-    @synchronized (self.dgkvo_blockObservers) {
-        [self.dgkvo_blockObservers removeObjectIdenticalTo:identifier];
-    }
+    // Reference counting:  we retained the observer when added, so must release now to balance
+    // GC:                  no-op
+    [observer release];
 }
 
 @end
