@@ -94,8 +94,16 @@ NSString *DGKVOBlocksObservationContext = @"DGKVOBlocksObservationContext";
     
     [self addObserver:newBlocksObserver forKeyPath:keyPath options:options context:&DGKVOBlocksObservationContext];
     
-    // Reference counting:  we retain the observer until client removes it
-    // GC:                  the caller is responsible for keeping strong ref to the observer
+    // ARC: An autoreleased object is being returned. Normally you'd expect ARC to retain it, but might not because:
+    //        * client doesn't bother to keep a ref to it - bad client!
+    //        * calling code is actually MRC and expects not to have to retain the observer
+    //        * client stores reference weakly
+    //      Thus I'm pretty certain what we want is to bypass ARC and CFRetain the observer here
+    //
+    // GC:  The caller is responsible for keeping strong ref to the observer. If they don't, it gets torn down early
+    //      and GC takes care of removing the observer for us
+    //
+    // MRC: We retain the observer until client removes it
     return newBlocksObserver;
 }
 
